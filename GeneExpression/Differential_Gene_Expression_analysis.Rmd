@@ -1,0 +1,624 @@
+---
+title: "Gene Analysis Expression - Rocco Saviano"
+author: "Rocco Saviano"
+date: "2024-05-31"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+# Imposta le opzioni globali di knitr
+knitr::opts_chunk$set(
+  echo = TRUE,         # codice nei chunk
+  message = FALSE,     # messaggi
+  warning = FALSE,     # avvisi
+  results = 'markup',  # risultati del codice
+  fig.show = 'hold',  #grafici
+  always_allow_html=TRUE
+)
+```
+
+# Analisi dell'espressione differenziale in diverse condizioni
+
+Nella seguente analisi, l'obiettivo è studiare l'espressione differenziale di specifici geni in diverse condizioni, in particolare nel contesto del cancro al seno. Utilizziamo esemplari di topo, che condividono gran parte del genoma con l'essere umano, per studiare l'espressione differenziale in tre condizioni: silenziamento di BRCA1 (gene che produce una proteina coinvolta nella riparazione del DNA; la sua disfunzione è associata a un aumentato rischio di sviluppare certi tipi di cancro, come il cancro al seno), silenziamento di BRCA2 (gene che produce una proteina fondamentale per la riparazione del DNA e la stabilità genomica. Le proteine codificate da questi geni aiutano a riparare i danni al DNA che possono portare a mutazioni e sviluppo di tumori), e la condizione "Wild Type" (senza silenziamento).
+
+## Analisi Silenziamento BRCA2 vs WT senza silenziamento
+
+In questo primo confronto si intende confrontare l'espressione differenziale tra i campioni tumorali che presentano un silenziamento del gene BRCA2 e i campioni tumorali che non presentano nessun tipo di silenziamento
+
+### Step 1: Import dei dati
+
+Sfruttiamo la libreria GEOquery per caricare i dati relativi a questo specifico esperimento e successivamente consideriamo solo la matrice dei conteggi grezza di interesse da cui estraiamo i conteggi
+
+```{r}
+
+library(GEOquery)
+gse <- getGEO("GSE137818")[[1]]
+#getGEOSuppFiles("GSE137818")
+raw_data <- read.csv("GSE137818/GSE137818_Mouse_UNTREATED_bulkRNA_BRCA2KO_vs_WT_rawcounts.csv.gz", stringsAsFactors = FALSE)
+head(raw_data[,1:5])
+
+conteggi <- raw_data[,-1]
+```
+
+### Step 2: Modifica e processing dei dati
+
+In questa fase andiamo a modificare i nomi dei campioni rispetto al formato orginale per migliorarne l'interpretazione
+
+```{r}
+old_names <- strsplit(names(raw_data), split="_")
+new_names <- vector("list", length(old_names))
+
+for (i in 2:length(old_names)) {
+  if (old_names[[i]][1] == "KO") {
+    old_names[[i]][1] <- "BRCA2"
+  }
+  if (length(old_names[[i]]) > 1) {
+    new_names[[i]] <- paste(old_names[[i]][1], old_names[[i]][length(old_names[[i]])],  sep = "-")
+  } else {
+    new_names[[i]] <- old_names[[i]][1]
+  }
+}
+new_names <- unlist(new_names)
+
+names(conteggi) <- new_names #abbiamo cambiato i nomi rendendoli un po' più leggibili
+head(conteggi)
+```
+
+Andiamo a costruire l'oggetto della classe SummarizedExpreriment, ma prima andiamo a costruire i rowData formati dalla coppia ENTREZID-GENE SYMBOL per ogni gene, i colData formati semplicemente dai nomi dei campioni e dalla condizione Silenziato/non silenziato
+
+```{r}
+library(SummarizedExperiment)
+library(clusterProfiler)
+id_geni <- raw_data[,1]
+rownames(conteggi) <- id_geni
+
+organism <- 'org.Mm.eg.db'
+gene_symb <- bitr(id_geni, fromType="ENTREZID", toType="SYMBOL",OrgDb = organism)
+row_data <- data.frame(ENTREZID=id_geni, ordine=seq_along(id_geni))
+row_data <- merge(row_data ,gene_symb, by = "ENTREZID", all.x=TRUE)
+
+
+```
+
+Abbiamo poi costruito i rowRanges cioè le posizioni dei geni sul cromosoma di riferimento e il cromosoma di riferimento, per fare ciò abbiamo sfruttato il pacchetto biomaRt che ci permette di collegarci ad un database di Ensembl in particolare a quello del topo, successivamente abbiamo effettuato il mapping grazie al pacchetto GenomicRanges. Infine è stato possibile costruire il summarized Experiment contente tutte le informazioni neccessarie per l'analisi, andiamo poi a salvare il SummarizedExperiment in modo da poterlo richiamare facilmente nelle prossime occasioni
+
+```{r}
+library(dplyr)
+library(biomaRt)
+library(GenomicRanges)
+fonte <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+posizioni_geni <- getBM(filters = "entrezgene_id", attributes = c("entrezgene_id", "chromosome_name", "start_position", "end_position"), values = id_geni, mart = fonte)
+names(posizioni_geni)[1] <- "ENTREZID"
+
+#nel caso di duplicati teniamo in considerazione solo la prima occorrenza
+posizioni_geni <- posizioni_geni %>% distinct(ENTREZID, .keep_all = TRUE)
+row_data <- merge(row_data, posizioni_geni, by = "ENTREZID", all.x=TRUE)
+row_data <- row_data[order(row_data$ordine),]
+row_data$ordine <- NULL
+silenziamento <- lapply(new_names, function(name){
+  if (substr(name, 1, 4) == "BRCA") {
+    return("S")
+  } else {
+    return("NS")
+  }
+})
+
+silenziamento <- unlist(silenziamento)
+colData <- cbind(new_names, silenziamento)
+
+se <- SummarizedExperiment(
+    assays = conteggi,
+    rowData = row_data,
+    colData = colData,
+)
+```
+
+```{r}
+head(assay(se))
+```
+
+```{r}
+colData(se)
+```
+
+
+```{r}
+saveRDS(se, file = "GSE137818_SummarizedExperiment.rds")
+rowData(se)
+```
+
+
+```{r}
+sort(table(rowData(se)$chromosome_name))
+```
+
+```{r}
+se <- readRDS("GSE137818_SummarizedExperiment.rds")
+```
+
+### Step 3: Analisi esplorativa dei dati e filtraggio
+
+Possiamo fare un primo boxplot su scala logaritmica per capire se i dati che guardiamo sono comparabili
+
+```{r}
+library(RColorBrewer) 
+pal<-brewer.pal(3, "Set2")
+boxplot(log1p(assay(se)), col=pal[as.factor(se$silenziamento)], las=2)
+```
+
+e osserviamo che tutto sommato per tutti i campioni siamo sugli stessi ordini di grandezza, possiamo di seguito effettuare un filtraggio andando a scartare i geni che sono poco presenti in particolare quelli con somma di riga minore o uguale a 10
+
+```{r}
+sef <- se[rowSums(assay(se))>10,]
+assay(sef,"log") <- log1p(assay(sef)) 
+boxplot(assay(sef,"log"), col=pal[as.factor(sef$silenziamento)], las=2)
+```
+
+A seguito del filtraggio possiamo osservare che rimuovendo i geni scarsamente espressi che potrebbero rappresentare un rumore nei nostri dati, abbiamo migliorato le distribuzioni dei dati perchè è come se avessimo delle distribuzioni più "regolari" e simmetriche rispetto al boxplot precedente
+
+![Come un boxplot va interpretato in termini di distribuzione di probabilità](Box-plot-and-PDF-of-a-Gaussian-dataset.png)
+
+Andiamo poi ad fare un grafico RLE (Relative Log Expression) che ci restituisce come informazione il logaritmo del valore dei nostri geni normalizzati rispetto alla loro mediana su tutti i campioni (log(gi_c1/gi_cmedian)), possiamo osservare che già senza nessuna normalizzazione dovremmo avere una lieve sovraespressione nei campioni con silenziamento di BRCA2 a meno di differenze legate all'atto dell'esperimento, effetto che proveremo poi a mitigare senza appiattire troppo il contenuto informativo del segnale successivamente con la normalizzazione.
+
+```{r}
+library(EDASeq)
+plotRLE(as.matrix(assay(sef)), col=pal[as.factor(sef$silenziamento)], outline=FALSE, las=2)
+```
+
+Andando poi a costruire la PCA osserviamo la netta separazione delle due tipologie di campione, anche se i campioni WT risultano poco vicini in termini della PC2 e la varianza totale spiegata è di circa 50% rispetto al 70-80% che ci aspettiamo per una buona rappresentazione dei dati
+
+```{r}
+plotPCA(as.matrix(assay(sef)), col=pal[as.factor(sef$silenziamento)])
+```
+
+Risulta quindi necessario a valle di queste ultime osservazioni cercare di migliorare la situazione andando a normalizzare i dati
+
+## Step 4: Esplorazione delle normalizzazioni 
+
+Calcoliamo diverse tipologie di normalizzazione ovvero: 
+
+-Upper Quartile: Allinea i dati rispetto al valore del 3 quartile 
+
+-Full Quartile: Usa tutti i quartili per calcolare un fattore di scala 
+
+-Trimmed Mean of M values: Calcola un fattore di scala sfruttando la media dei rapporti di espressione dei geni 
+
+-RLE: "median library is calculated from the geometric mean of all columns and the median ratio of each sample to the median library is taken as the scale factor."
+
+```{r}
+library(edgeR)
+assayNames(sef)[1] <- "counts"
+assay(sef, "upper") <- betweenLaneNormalization(as.matrix(assay(sef)), which="upper")
+assay(sef, "full") <- betweenLaneNormalization(as.matrix(assay(sef)), which="full")
+assay(sef, "tmm") <- cpm(assay(sef), lib.size = calcNormFactors(assay(sef), method = "TMM") * colSums(assay(sef)))
+assay(sef, "rle_gm") <- cpm(assay(sef), lib.size = calcNormFactors(assay(sef), method = "RLE") * colSums(assay(sef)))
+```
+
+```{r}
+for(a in c("counts","upper", "full", "tmm", "rle_gm")) {
+ plotRLE(as.matrix(assay(sef, a)), col=pal[as.factor(sef$silenziamento)], las=2, outline=FALSE, main = a)
+}
+```
+
+```{r}
+for(a in c("counts","upper", "full", "tmm", "rle_gm")) {
+ plotPCA(as.matrix(assay(sef, a)), col=pal[as.factor(sef$silenziamento)], main = a)
+}
+```
+
+## Step5: Stima e validazione dei parametri di normalizzazione e dispersione
+
+A seguito dello step precedente, la normalizzazione che spiega la maggior parte della varianza, permette una netta separazione dei campioni in due regioni dello spazio delle componenti principali senza far collassare i diversi campioni in un unico punto e allo stesso tempo permette nei boxplot di avere mediane allineate e box confrontabili è la "TMM".
+Andiamo quindi a calcolare i fattori di normalizzazione e li salviamo nella variabile 'dge'
+```{r}
+dge <- calcNormFactors(sef, method = "TMM")
+```
+
+Andiamo poi a costruire la model matrix, cioè come le covariate (cioè le variabili indipendenti che nel nostro caso è il Silenziamento) sono organizzate (se più di 1, non come nel nostro caso) per modellare la loro dipendenza dalla variabile dipendente che nel nostro caso è l'espressione genica dei vari geni  
+
+```{r}
+design <- model.matrix(~ silenziamento ,data=colData(sef))
+```
+
+Andiamo poi a stimare la dispersione dei dati grazie alla funzione "estimateDisp" che sfruttando i fattori di normalizzazione e la matrice di design ci restituisce:
+
+-la dispersione globale comune a tutti i geni
+
+-relazione tra media e dispersione di ogni singolo gene (come la varianza cambia in funzione del livello medio di espressione genica)
+
+-la dispersione specifica per ogni gene
+
+Successivamente andiamo a plottare il grafico "Media-Varianza" in cui:
+
+-Gli elementi grigi rappresentano la varianza grezza cioè la varianza osservata per ciascun gene 
+
+-Gli elementi azzurri rappresentano la varianza stimata per ciascun gene sfruttando i parametri di dispersione calcolati nello stesso blocco di codice
+
+-La trend-line rappresenta la varianza attesa dato un certo livello medio di espressione genica, considerando una distribuzione binomiale negativa 
+
+
+```{r}
+dge <- estimateDisp(dge, design)
+plotMeanVar(dge, show.raw.vars = TRUE, show.tagwise.vars = TRUE,
+ show.ave.raw.vars = FALSE)
+```
+
+Possiamo quindi dedurre dal grafico Media-Varianza che sia i dati grezzi che quelli stimati presentano una varianza maggiore del normale (rispetto alla linea nera), suggerendo la presenza di geni con variazioni significative di espressione tra i vari campioni che potrebbero quindi essere differenzialmente espressi. 
+
+A seguire, andiamo a plottare il coefficiente di variazione biologica (BCV) che plotta i conteggi rispetto ad un parametro che misura la dispersione rispetto alla variabilità biologica dei campioni
+Nel grafico possiamo osservare:
+
+-I pallini neri che rappresentano il coefficiente di variazione biologica stimata per ogni campione
+
+-il coefficiente di variazione biologica comune stimato su tutti i geni
+
+-il coefficiente di variazione biologica stimata rispetto al livello medio di espressione di tutti i geni 
+
+```{r}
+plotBCV(dge)
+```
+
+Possiamo a valle di questi grafici fare le seguenti osservazioni: 
+Osserviamo che i tagwise seguono l'andamento della Trend per la maggior parte dei geni, inoltre osserviamo che seppur nel grafico Mean-Variance precedente i geni non fossero perfettamente distribuiti intorno alla varianza attesa, il trend viene seguito in maniera abbastanza fedele, dunque queste informazioni ci danno sicurezza rispetto alla "validazione" dei parametri di stima calcolati con la funzione 'estimateDisp' 
+
+## Step 6: Analisi dell'espressione differenziale 
+
+Con i parametri di dispersione (per catturare la variabilità biologica) e i coefficienti di normalizzazione (per eliminare variazioni non biologiche) ottenuti e validati nello step precedente, andiamo a costruire lo specifico modello lineare generalizzato (GLM) specificando il contrasto per indicare che nel calcolo del log(FC) debba considerare Silenzati/Non Silenziati e cambiando la matrice di design aggiungendo uno 0 in modo da usare un "_non-intercept_ model" come di consueto in questo tipo di analisi.
+
+```{r}
+design0 <- model.matrix(~ 0 + silenziamento ,data=colData(sef))
+cont <- makeContrasts(silenziamentoS - silenziamentoNS, levels=design0)
+glm_s <- glmFit(dge, design0)
+```
+
+Eseguiamo il test di espressione differenziale utilizzando il modello costruito
+
+```{r}
+ris <- glmLRT(glm_s, contrast = cont)
+```
+
+```{r}
+top <- topTags(ris, n=Inf)$table
+diff_exp <- top[top$FDR<=0.05,]
+up_reg <- diff_exp[(diff_exp$logFC)>0,]
+down_reg <- diff_exp[(diff_exp$logFC)<0,]
+table(top$FDR<=0.05)
+```
+
+Ottenendo 4273 geni differenzialmente espressi considerando come p-value ajusted (FDR) ≤ 0.05. che si distribuiscono sui diversi cromosomi nel seguente modo:
+
+```{r}
+sort(table(diff_exp$chromosome_name))
+```
+Inoltre abbiamo suddiviso il nostro set in due partizioni, i geni up-regolati che rappresentano una maggiore presenza nel caso di silenziamento di BRCA2 e i geni down-regolati che rappresentano una minore presenza nel caso di silenziamento di BRCA2
+
+```{r}
+dim(up_reg)
+```
+
+```{r}
+dim(down_reg)
+```
+
+## Step 7: Analisi funzionale ed enrchiment
+
+Ottenuti i geni che risultano espressi in maniera significativamente diversa tra i due cluster di campioni, possiamo andare a fare un'analisi funzionale per cercare di capire a che servono questi geni e quindi in che modo la loro diversa espressione si ripercuote poi in termini funzionali
+
+### Analisi Generale 
+
+La prima cosa è andare a guardare in generale, senza distinzione di up e down regolati cosa possiamo dedurre
+
+#### Gene Ontology
+
+Andiamo a fare un'analisi di arricchimento rispetto alla Gene Ontology, e successivamente andiamo a fare diversi plot in diverse condizioni considerando per il cnetplot una partizione relativa ai primi 15 elementi relativi alla gene ontology per avere una maggiore leggibilità 
+
+```{r}
+library(simplifyEnrichment)
+library(clusterProfiler)
+library(enrichplot)
+
+gene_sym <- diff_exp$SYMBOL
+go_sym <- enrichGO(gene_sym, OrgDb = organism,
+                           keyType ="SYMBOL", ont = "ALL")
+dotplot(go_sym, showCategory=10)
+
+go_sym1<-pairwise_termsim(go_sym)
+emapplot(go_sym1, showCategory=10)
+
+gene_list <- diff_exp
+fold_changes <- setNames(gene_list$logFC, gene_list$SYMBOL)
+go_sym_sub <- subset_enrichResult(go_sym, 15)
+cnetplot(go_sym, foldChange=fold_changes, circular = TRUE, colorEdge = TRUE)
+cnetplot(go_sym_sub, foldChange=fold_changes, circular = TRUE, colorEdge = TRUE)
+
+```
+
+Usando invece i plot offerti da gprofiler2
+
+```{r}
+library(gprofiler2)
+geneOnt_ris <- gost(gene_sym, sources="GO",organism = "mmusculus", significant = TRUE, user_threshold = 0.05)
+gostplot(geneOnt_ris, interactive = TRUE)
+```
+Andando però a dividere le tre macro aree del vocabolario gene ontology osserviamo che
+
+```{r}
+table(go_sym@result$ONTOLOGY)
+```
+
+```{r}
+((go_sym@result)[go_sym@result$ONTOLOGY == "BP", ])[1:5,3]
+```
+
+```{r}
+((go_sym@result)[go_sym@result$ONTOLOGY == "CC", ])[1:5,3]
+```
+
+```{r}
+((go_sym@result)[go_sym@result$ONTOLOGY == "MF", ])[1:5,3]
+```
+
+
+### KEGG Pathways - Overview 
+
+Sfruttiamo poi i KEGG Pathways per continuare la nostra analisi fuzionale usando sia ClusterProfiler che Gprofiler2 
+
+```{r}
+gene_entrez <- diff_exp$ENTREZID
+Enrich.KEG <- enrichKEGG(gene_entrez, organism="mmu")
+Enrich.KEG1<-pairwise_termsim(Enrich.KEG)
+dotplot(Enrich.KEG , showCategory=10)
+emapplot(Enrich.KEG1, , showCategory=10)
+cnetplot(Enrich.KEG, foldChange=fold_changes, circular = TRUE, colorEdge = TRUE) 
+```
+
+```{r}
+Kegg_res <- gost(gene_entrez, sources="KEGG", organism = "mmusculus", significant = TRUE,user_threshold = 0.05)
+gostplot(Kegg_res, interactive = TRUE)
+```
+
+Abbiamo trovato quindi i seguenti risultati per Gprofiler2 e ClusterProfiler
+```{r}
+Kegg_res$result$term_name
+```
+
+```{r}
+Enrich.KEG$Description
+```
+
+Che sono coerenti tra loro, possiamo inoltre notare che come visto a lezione è presente il pathway per il Covid19 ma non possiamo dire se questo silenziamento in termini di KEGG Pathways vada ad influire positivamente o nega tivamente per il cancro al seno, infatti come possiamo notare è presente "Pathways in cancer" ([47] di Kegg_res) ma non sappiamo se in termini positivi o negativi 
+
+### KEGG Pathways - Geni UP REGOLATI 
+```{r}
+upgene_entrez <- up_reg$ENTREZID
+Kegg_res <- gost(upgene_entrez, sources="KEGG", organism = "mmusculus", significant = TRUE,user_threshold = 0.05)
+Kegg_res$result$term_name
+```
+
+### KEGG Pathways - Geni DOWN REGOLATI 
+```{r}
+downgene_entrez <- down_reg$ENTREZID
+Kegg_res <- gost(downgene_entrez, sources="KEGG", organism = "mmusculus", significant = TRUE,user_threshold = 0.05)
+Kegg_res$result$term_name
+```
+
+### KEGG Pathways - Considerazioni finali 
+
+"La sovraespressione di pathways immunitari e infiammatori suggerisce una maggiore attivazione della risposta immunitaria, che può essere positiva se il sistema immunitario riesce a riconoscere e attaccare le cellule tumorali. Tuttavia, l'infiammazione cronica può anche favorire la progressione tumorale.
+
+La sottoespressione di pathways legati alla crescita, adesione e metabolismo cellulare suggerisce una ridotta capacità del tumore di proliferare, sopravvivere e metastatizzare, il che è generalmente positivo per il controllo del tumore.
+Conclusione:
+
+Nel complesso, il silenziamento di BRCA2 sembra avere un effetto misto, ma prevalentemente positivo rispetto al controllo del tumore al seno. La riduzione della proliferazione e della capacità metastatica delle cellule tumorali, insieme a una potenziale maggiore suscettibilità alle terapie immunitarie, suggerisce che il silenziamento di BRCA2 potrebbe limitare la progressione del tumore al seno. Tuttavia, è essenziale considerare il contesto specifico e ulteriori studi sperimentali per confermare questa valutazione."
+
+Un'ulteriore informazione interessante è che separando up e down regolati otteniamo un numero minore di pathway rispetto al considerarli entrambi contemporaneamente 
+
+```{r}
+#install.packages("remotes")
+#remotes::install_github("jokergoo/simplifyEnrichment")
+#per poter usare la funzione che fa un subset di un enrichResult: subset_enrichResult(elemento, quantità)
+```
+
+## Step 8: Network Analysis 
+
+### Similarità dei campioni
+Come ultima parte di questo progetto, ci si pone l'obbiettivo di analizzare i nostri campioni in termini di rete per vedere come questi di distribuiscono in termini di similarità, prima di tutto andiamo calcolare la matrice delle distanze della trasposta dei nostri geni 
+```{r}
+library(igraph)
+library(philentropy)
+Gene_Expression <- assay(sef, "tmm")
+dist <- as.matrix(distance(t(Gene_Expression), method = "euclidean", use.row.names = TRUE))
+```
+
+ottendo le seguenti distanze
+```{r}
+dist
+```
+
+Rispetto alle distanze ottenute, andiamo a "tagliare" i collegamenti per quelli che cadono al di sotto del quantile calcolato al 50% per non avere una rete densa e per poter identificare i sottogruppi, inoltre la nostra rete non è pesata quindi sostituiamo al valore di distanza 1 per indicare la presenza di un collegamento ed inoltre annulliamo anche la diagonale principale per evitare loop locali 
+
+```{r}
+dist[dist<quantile(dist,0.5)] <- 1
+dist[dist>=quantile(dist,0.5)] <- 0
+diag(dist) <- 0
+dist
+```
+
+a questo punto abbiamo una matrice che ci permette di costruire un grafico in maniera leggera in termini computazionali costruendo un oggeto di tipo iGraph  
+
+```{r}
+net <- graph_from_adjacency_matrix(dist, mode="undirected")
+plot(net, vertex.size=5,vertex.label.cex=0.5, vertex.frame.color="#ffffff",vertex.color="green")
+```
+
+Osservando come si creino due reti ben separate tra i campioni silenziati e quelli non silenziati dando validità in termini di robustezza alle nostre analisi perchè i campioni dei due gruppi sono simili tra loro.
+
+### Clustering dell'enrichmentResult del GO - Ovewview 
+
+```{r}
+#remotes::install_github("jmw86069/jamenrich")
+```
+
+```{r}
+library(multienrichjam)
+library(jamba)
+library(colorjam)
+go_net <- (go_sym)[go_sym@result$ONTOLOGY == "BP", ]
+go_net<-enrichMapJam(go_net)
+plot(go_net, vertex.size=8,vertex.label="", vertex.frame.color="#ffffff",vertex.color="green")
+```
+
+Possiamo osservare come nella nostra rete siano presenti dei gruppi più o meno grandi e vogliamo indentificarli con l'algoritmo Louvaine, previa una rimozione dei nodi isolati 
+
+```{r}
+ind <- which((degree(go_net)) == 0)
+go_net<- delete_vertices(go_net, ind)
+```
+
+```{r}
+cl <- cluster_louvain(go_net)
+plot(go_net, vertex.size=5,vertex.label="", vertex.frame.color="#ffffff",vertex.color=cl$membership) 
+```
+
+Abbiamo quindi identificato i nostri clusters, per capire questi clusters se sono up o down regolati e quindi, nel caso in esame del silenziamento di BRCA2 vanno ad inibire o stimolare determinati processi bisogna considerare l'up e down regolation dei geni e non la semplice espressione differenziale come abbiamo appena fatto 
+
+### Clustering dell'enrichment Result del GO - Geni UP REGOLATI 
+
+```{r}
+upgene_sym <- up_reg$SYMBOL
+upgo_sym <- enrichGO(upgene_sym, OrgDb = organism,
+                           keyType ="SYMBOL", ont = "ALL")
+upgo_net <- (upgo_sym)[upgo_sym@result$ONTOLOGY == "BP", ]
+upgo_net<-enrichMapJam(upgo_net)
+
+ind <- which((degree(upgo_net)) == 0)
+upgo_net<- delete_vertices(upgo_net, ind)
+cl <- cluster_louvain(upgo_net)
+plot(upgo_net, vertex.size=5,vertex.label="", vertex.frame.color="#ffffff",vertex.color=cl$membership) 
+```
+
+Identificando 3 cluster ben distinti che possiamo studiare 
+
+
+```{r}
+df <- data.frame(length, index)
+for (i in seq_along(cl)) {
+  df <- rbind(df, data.frame(length = length(unlist(cl[i])), index = i))
+}
+df_clust <- df[order(df$length, decreasing = TRUE), ]
+df_clust
+```
+
+```{r}
+for (i in 1:nrow(df_clust)) {
+  num <- df_clust[i, 2]
+  cat("Cluster", num, ": è formato da\n")
+  cat(paste(cl[[num]], collapse = ",\n"), "\n\n")
+}
+```
+
+Abbiamo quindi trovato per ora questi 3 cluster di processi biologici che nel caso del silenziamento di BRCA2 sono sovra-stimolati
+
+### Clustering dell'enrichment Result del GO- Geni DOWN REGOLATI 
+
+```{r}
+downgene_sym <- down_reg$SYMBOL
+downgo_sym <- enrichGO(downgene_sym, OrgDb = organism,
+                           keyType ="SYMBOL", ont = "ALL")
+downgo_net <- (downgo_sym)[downgo_sym@result$ONTOLOGY == "BP", ]
+downgo_net<-enrichMapJam(downgo_net)
+
+ind <- which((degree(downgo_net)) == 0)
+downgo_net<- delete_vertices(downgo_net, ind)
+cl <- cluster_louvain(downgo_net)
+plot(downgo_net, vertex.size=5,vertex.label="", vertex.frame.color="#ffffff",vertex.color=cl$membership) 
+```
+
+Identificando 9 cluster ben distinti che possiamo studiare 
+
+
+```{r}
+df <- data.frame(length, index)
+for (i in seq_along(cl)) {
+  df <- rbind(df, data.frame(length = length(unlist(cl[i])), index = i))
+}
+df_clust <- df[order(df$length, decreasing = TRUE), ]
+df_clust
+```
+
+```{r}
+for (i in 1:nrow(df_clust)) {
+  num <- df_clust[i, 2]
+  cat("Cluster", num, ": è formato da\n")
+  cat(paste(cl[[num]], collapse = ",\n"), "\n\n")
+}
+```
+
+Abbiamo quindi trovato per ora questi 9 cluster di processi biologici che nel caso del silenziamento di BRCA2 sono inibiti.
+
+
+### Clustering dell'enrichment Result del GO - Considerazioni finali 
+
+"Nel complesso, i geni up-regolati mostrano un miglioramento della risposta immunitaria che può essere positivo per la sorveglianza e l'eliminazione delle cellule tumorali, ma possono anche promuovere l'infiammazione cronica che può avere effetti pro-tumorali. D'altra parte, i geni down-regolati riducono processi cruciali per la crescita, la sopravvivenza e la metastasi delle cellule tumorali, suggerendo un effetto complessivamente positivo contro il tumore."
+
+Inoltre: 
+
+"La clusterizzazione non è stata inutile; al contrario, ha fornito un quadro più chiaro e dettagliato dei processi biologici coinvolti. Ha permesso di valutare meglio l'impatto del silenziamento di BRCA2 e di identificare pathways specifici che possono essere target terapeutici.
+
+In sintesi, mentre una lista di geni regolati è utile, la clusterizzazione offre un valore aggiunto significativo per l'interpretazione biologica e la valutazione finale."
+
+## Step : Heatmap Analisys 
+
+In questo ultimo step, diamo uno sguardo alle heatmap e osserviamo diverse informazioni interessanti
+
+### Analisi generale 
+
+Guardiamo in primis un po' di heatmap dei geni differenzialmente espressi in generale, quelli up regolati e down regolati
+
+```{r}
+library(pheatmap)
+pheatmap(assay(sef)[rownames(assay(sef,"tmm")) %in% diff_exp$ENTREZID, ], scale = "row", cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, show_colnames = TRUE, 
+         main = "Heatmap dei Geni Differenzialmente Espressi")
+```
+
+
+
+```{r}
+pheatmap(assay(sef)[rownames(assay(sef,"tmm")) %in% up_reg$ENTREZID, ], scale = "row", cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, show_colnames = TRUE, 
+         main = "Heatmap dei Geni Up_regolati")
+```
+
+
+
+```{r}
+pheatmap(assay(sef)[rownames(assay(sef,"tmm")) %in% down_reg$ENTREZID, ], scale = "row", cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, show_colnames = TRUE, 
+         main = "Heatmap dei Geni Down_regolati")
+```
+
+Osserviamo come ci sia una netta separazione in termini di gruppi tra BRCA e WT ad eccezione della mappa dei down-regolati in cui il campione WT-4 viene clusterizzato nel gruppo dei BRCA mentre il campione BRCA2-5 viene clusterizzato nel gruppo dei WT
+
+### Heatmap in un pathway 
+
+Dato che si parla di cancro, uno dei pathway sicuramente interessante è "immune response-regulating signaling pathway" identificato nei GO-Terms che risulta up-regolato
+
+```{r}
+upgene_sym <- up_reg$ENTREZID
+upgo_sym <- enrichGO(upgene_sym, OrgDb = organism,
+                           keyType ="ENTREZID", ont = "BP")
+pos<-which(upgo_sym@result$Description == "immune response-regulating signaling pathway")
+pathway_genes <- strsplit(upgo_sym@result[pos,]$geneID, split = "/")[[1]]
+
+pheatmap(assay(sef, "tmm")[rownames(assay(sef)) %in% pathway_genes, ], scale = "row", cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, show_colnames = TRUE, 
+         main = "Heatmap dei Geni Up Regolati del Pathway")
+```
+
+Possiamo osservare come, in questo pathway, tutti i geni contribuiscano allo stesso modo perchè non ci sono regioni orizzontali particolamente intense rispetto alle altre (nella partizione BRCA2) anzi, le regioni di maggior intensità per ogni campione di distribuiscono su sotto-gruppi di geni diversi, questo suggerisce che il Pathway di interesse si verifichi effettivamente piuttosto che, come nel caso del pathway del covid 19 questo venga identificato in maniera erronea 
+
+
+
+
