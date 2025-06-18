@@ -9,6 +9,7 @@ My significant project index
   - Dataset preprocessing 
   - ML algorithms comparison (SVM, Decision Tree, Random Forest, AdaBoost, Clustering)
   - Learning curves analysis
+
   **Best classificator ->** Decision Tree Pruned (Entropy, max_depth=4, min_samples_leaf=10) with 80% accuracy score and 0.81 AUC 
  
   ## 🧬 Differential Gene Expression Analysis
