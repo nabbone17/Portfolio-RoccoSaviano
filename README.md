@@ -2,7 +2,7 @@
 My significant project index
 
 ## 🩺 [Diabetes Classification](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/GeneExpression) 
-[(You can see it here)](https://nbviewer.org/github/nabbone17/Portfolio-RoccoSaviano/blob/main/Pima-Indian-Diabete/PimaIndian_Diabete_Classifcation_Study.ipynb)
+[📓 View Notebook](https://nbviewer.org/github/nabbone17/Portfolio-RoccoSaviano/blob/main/Pima-Indian-Diabete/PimaIndian_Diabete_Classifcation_Study.ipynb)
 - **Tech stack:** Python, Scikit-learn, TensorFlow, Pandas, Matplotlib
 - **Key points:**
   - Exploratory Dataset Analysis 
