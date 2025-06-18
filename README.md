@@ -1,7 +1,7 @@
 # Portfolio RoccoSaviano:
 My significant project index
 
-## 🩺 Diabetes Classification (./Pima-Indian-Diabete/)
+## 🩺 [Diabetes Classification](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/GeneExpression) 
 - **Tech stack:** Python, Scikit-learn, TensorFlow, Pandas, Matplotlib
 - **Key points:**
   - Exploratory Dataset Analysis 
@@ -12,7 +12,7 @@ My significant project index
 
   **Best classificator ->** Decision Tree Pruned (Entropy, max_depth=4, min_samples_leaf=10) with 80% accuracy score and 0.81 AUC 
  
-  ## 🧬 Differential Gene Expression Analysis (./GeneExpression/)
+  ## 🧬 [Differential Gene Expression Analysis](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/GeneExpression) 
 - **Tech stack:** R, Bioconductor, DESeq2, PCA, Statistical Analysis
 - **Key points:**
   - Differential expression analysis on genetically silenced samples
