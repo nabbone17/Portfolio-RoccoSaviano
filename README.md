@@ -3,7 +3,7 @@ My significant projects overview
 
 ## 🩺 [Machine Learning Algorithms for Diabetes Classification](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/Pima-Indian-Diabete) 
 [📓 View Notebook](https://nbviewer.org/github/nabbone17/Portfolio-RoccoSaviano/blob/main/Pima-Indian-Diabete/PimaIndian_Diabete_Classifcation_Study.ipynb)
-- **Tech stack:** Python, Scikit-learn, TensorFlow, Pandas, Matplotlib
+- **Tech stack:** Python, Scikit-learn, Pandas, Matplotlib
 - **Key points:**
   - Exploratory Dataset Analysis 
   - Binary classification on Pima Indians dataset
