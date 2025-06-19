@@ -24,8 +24,8 @@ My significant projects overview.
   - DEGs identification in disease gene sets
   - Gene regulatory networks construction
 
-## ⚛️🌡️ Quantum Fuzzy Controller for Smart Building Temperature Management
-[📓 View Notebook]()
+## ⚛️🌡️ [Quantum Fuzzy Controller for Smart Building Temperature Management](https://github.com/roccosaviano/Portfolio-RoccoSaviano/blob/main/QuantumFuzzyController/Progetto_Quantum_Termostato.ipynb)
+[📓 View Notebook](https://github.com/roccosaviano/Portfolio-RoccoSaviano/blob/main/QuantumFuzzyController/Progetto_Quantum_Termostato.ipynb)
 
 - **Tech stack:** Python, Quantum Computing, YOLO v8, OpenCV, QFIE Library, Fuzzy Logic, Computer Vision
 - **Key points:**
