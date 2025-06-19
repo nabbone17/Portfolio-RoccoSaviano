@@ -2,7 +2,7 @@
 My significant projects overview.
 
 ## 🩺 [Machine Learning Algorithms for Diabetes Classification](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/Pima-Indian-Diabete) 
-<a href="https://nbviewer.org/github/roccosaviano/Portfolio-RoccoSaviano/blob/main/Pima-Indian-Diabete/PimaIndian_Diabete_Classifcation_Study.ipynb" target="_blank">📓 View Notebook</a>
+[📓 View Notebook](https://nbviewer.org/github/roccosaviano/Portfolio-RoccoSaviano/blob/main/Pima-Indian-Diabete/PimaIndian_Diabete_Classifcation_Study.ipynb)
 - **Tech stack:** Python, Scikit-learn, Pandas, Matplotlib
 - **Key points:**
   - Exploratory Dataset Analysis 
@@ -24,8 +24,8 @@ My significant projects overview.
   - DEGs identification in disease gene sets
   - Gene regulatory networks construction
 
-## 🌡️ Quantum Fuzzy Controller for Smart Building Temperature Management
-📓 View Project Implementation ↗️
+## ⚛️🌡️ Quantum Fuzzy Controller for Smart Building Temperature Management
+[📓 View Notebook]()
 
 - **Tech stack:** Python, Quantum Computing, YOLO v8, OpenCV, QFIE Library, Fuzzy Logic, Computer Vision
 - **Key points:**
