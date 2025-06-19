@@ -24,3 +24,16 @@ My significant projects overview.
   - DEGs identification in disease gene sets
   - Gene regulatory networks construction
 
+## 🌡️ Quantum Fuzzy Controller for Smart Building Temperature Management
+📓 View Project Implementation ↗️
+
+- **Tech stack:** Python, Quantum Computing, YOLO v8, OpenCV, QFIE Library, Fuzzy Logic, Computer Vision
+- **Key points:**
+  - Real-time occupancy detection using YOLO model with IP camera integration
+  - Multi-input fuzzy system (occupancy, temperature, humidity, time scheduling)
+  - Quantum-enhanced fuzzy inference engine (QFIE) implementation
+  - Crisp-to-fuzzy input transformation
+  - Quantum circuit construction for probabilistic rule-based inference
+  - Monte Carlo simulation approach for robust probability distributions
+  - Center of gravity defuzzification for precise thermostat control
+  - Smart building automation with energy optimization focus using Quantum Computing Approach 
