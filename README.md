@@ -14,7 +14,7 @@ My significant projects overview.
   **Best classifier ->** Decision Tree Pruned (Entropy, max_depth=4, min_samples_leaf=10) with 80% accuracy score and 0.81 AUC 
  
 ## 🧬 [Differential Gene Expression Analysis](https://github.com/nabbone17/Portfolio-RoccoSaviano/tree/main/GeneExpression)
-[📊 View Analysis Report](https://nabbone17.github.io/Portfolio-RoccoSaviano/GeneExpression/Differential_Gene_Expression_analysis.html)
+[📊 View Analysis Report](https://roccosaviano.github.io/Portfolio-RoccoSaviano/GeneExpression/Differential_Gene_Expression_analysis.html)
 - **Tech stack:** R, Bioconductor, DESeq2, PCA, Statistical Analysis
 - **Key points:**
   - Differential expression analysis on genetically silenced samples
